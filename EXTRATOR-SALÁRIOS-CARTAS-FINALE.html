@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Leitor INSS (PDF → CSV)</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+</script>
+
+<style>
+body {
+    font-family: Arial, sans-serif;
+    margin: 20px;
+}
+
+/* Estilo das Abas */
+.tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.tablink {
+    padding: 12px 20px;
+    background-color: #ddd;
+    color: #333;
+    border: none;
+    border-radius: 6px 6px 0 0;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 15px;
+    transition: 0.3s;
+}
+
+.tablink:hover {
+    background-color: #ccc;
+}
+
+.tablink.active {
+    background-color: #007bff;
+    color: white;
+}
+
+#drop-zone {
+    border: 3px dashed #777;
+    padding: 50px;
+    text-align: center;
+    background: #f4f4f4;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: background 0.2s;
+}
+
+#drop-zone.dragover {
+    background: #d8ecff;
+    border-color: #0056b3;
+}
+
+.painel {
+    background: #eef5e4;
+    padding: 15px;
+    border-radius: 6px;
+    border: 1px solid #c8d8b8;
+    margin-top: 20px;
+    margin-bottom: 15px;
+}
+
+.controles-botoes {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+
+.controles-botoes button {
+    padding: 10px 15px;
+    background-color: #28a745;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.controles-botoes button:hover {
+    background-color: #218838;
+}
+
+.btn-limpar {
+    background-color: #dc3545 !important;
+}
+
+.btn-limpar:hover {
+    background-color: #c82333 !important;
+}
+
+.controles-botoes label {
+    cursor: pointer;
+    font-weight: bold;
+    user-select: none;
+    background: #fff;
+    padding: 6px 10px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    font-size: 13px;
+}
+
+.selecao-colunas {
+    border-top: 1px solid #c8d8b8;
+    padding-top: 10px;
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.selecao-colunas span {
+    font-weight: bold;
+    color: #444;
+}
+
+.selecao-colunas label {
+    cursor: pointer;
+    background: #fff;
+    padding: 5px 10px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    font-size: 14px;
+}
+
+table {
+    width: 100%;
+    margin-top: 10px;
+    border-collapse: collapse;
+}
+
+th, td {
+    border: 1px solid #ccc;
+    padding: 8px;
+    text-align: center;
+}
+
+th {
+    background: #eee;
+}
+
+.erro {
+    background-color: #ffcccc; 
+}
+
+#status {
+    margin-top: 10px;
+    font-weight: bold;
+    font-size: 1.1em;
+}
+
+#erros {
+    color: #b30000;
+    margin-top: 10px;
+    font-size: 0.95em;
+}
+</style>
+</head>
+
+<body>
+
+<h2>📊 Leitor Avançado de Carta INSS</h2>
+
+<div class="tabs">
+    <button id="tabAntes" class="tablink" onclick="setModelo('antes')">📄 Carta Antes da EC 103</button>
+    <button id="tabAntiga" class="tablink" onclick="setModelo('antiga')">📄 Carta EC 103 (SAT/SIBE)</button>
+    <button id="tabNova" class="tablink active" onclick="setModelo('nova')">📄 Carta Nova EC 103 (Várias colunas)</button>
+</div>
+
+<div id="drop-zone">
+    ➕ Arraste o PDF aqui ou clique para selecionar
+    <input type="file" id="fileInput" accept="application/pdf" hidden>
+</div>
+
+<div id="status">Selecione uma aba acima e carregue o PDF.</div>
+<div id="erros"></div>
+
+<div class="painel">
+    <div class="controles-botoes">
+        <button onclick="exportarCSV()">⬇ Baixar CSV Selecionado</button>
+        <button onclick="limparDados()" class="btn-limpar">🗑 Limpar Dados</button>
+        
+        <label title="Ignora as linhas com asterisco na carta">
+            <input type="checkbox" id="chkAsterisco" checked onchange="atualizarFiltros()"> 
+            Considerar asteriscos (*)
+        </label>
+
+        <label title="Se desmarcado, oculta salários marcados como descartados/excluídos">
+            <input type="checkbox" id="chkDescartado" checked onchange="atualizarFiltros()"> 
+            Considerar salários descartados/desconsiderados
+        </label>
+    </div>
+
+    <div class="selecao-colunas">
+        <span>Colunas no CSV:</span>
+        <label><input type="checkbox" id="colCompetencia" checked disabled> Competência (Obrigatória)</label>
+        <label><input type="checkbox" id="colSalario" checked> Salário Original</label>
+        <label><input type="checkbox" id="colIndice" checked> Índice</label>
+        <label><input type="checkbox" id="colCorrigido" checked> Salário Corrigido</label>
+    </div>
+</div>
+
+<table>
+<thead>
+<tr>
+<th>Competência</th>
+<th>Salário Original (R$)</th>
+<th>Índice</th>
+<th>Salário Corrigido (R$)</th>
+</tr>
+</thead>
+<tbody id="tabela"></tbody>
+</table>
+
+<script>
+
+let modeloAtivo = 'nova'; 
+let dados = [];
+
+function setModelo(modelo) {
+    modeloAtivo = modelo;
+    
+    document.getElementById("tabNova").classList.remove("active");
+    document.getElementById("tabAntiga").classList.remove("active");
+    document.getElementById("tabAntes").classList.remove("active");
+    
+    if (modelo === 'nova') {
+        document.getElementById("tabNova").classList.add("active");
+    } else if (modelo === 'antiga') {
+        document.getElementById("tabAntiga").classList.add("active");
+    } else {
+        document.getElementById("tabAntes").classList.add("active");
+    }
+
+    limparDados("Modelo alterado. Por favor, carregue o PDF novamente.");
+}
+
+function limparDados(mensagemPersonalizada = null) {
+    dados = [];
+    tabela.innerHTML = "";
+    document.getElementById("erros").innerHTML = "";
+    document.getElementById("fileInput").value = ""; 
+    status.innerText = mensagemPersonalizada || "Dados limpos. Selecione uma aba e carregue um novo PDF.";
+}
+
+const dropZone = document.getElementById("drop-zone");
+const fileInput = document.getElementById("fileInput");
+const status = document.getElementById("status");
+const tabela = document.getElementById("tabela");
+
+dropZone.addEventListener("click", () => fileInput.click());
+dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("dragover"); });
+dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
+dropZone.addEventListener("drop", e => {
+    e.preventDefault();
+    dropZone.classList.remove("dragover");
+    processarPDF(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener("change", () => processarPDF(fileInput.files[0]));
+
+async function processarPDF(file) {
+    if (!file) return;
+
+    status.innerText = "⏳ Lendo PDF...";
+    dados = [];
+    tabela.innerHTML = "";
+    document.getElementById("erros").innerHTML = "";
+
+    const reader = new FileReader();
+
+    reader.onload = async function () {
+        try {
+            const pdf = await pdfjsLib.getDocument(new Uint8Array(this.result)).promise;
+            let linhasGlobais = [];
+
+            for (let i = 1; i <= pdf.numPages; i++) {
+                status.innerText = "📄 Processando página " + i + " de " + pdf.numPages;
+                const page = await pdf.getPage(i);
+                const content = await page.getTextContent();
+
+                let items = content.items;
+
+                items.sort((a, b) => {
+                    let yA = a.transform[5];
+                    let yB = b.transform[5];
+                    if (Math.abs(yA - yB) > 4) return yB - yA; 
+                    return a.transform[4] - b.transform[4];
+                });
+
+                let linhaAtual = "";
+                let mapX = []; 
+                let yAtual = items.length > 0 ? items[0].transform[5] : 0;
+
+                items.forEach(item => {
+                    if (Math.abs(item.transform[5] - yAtual) > 4) {
+                        linhasGlobais.push({ texto: linhaAtual, mapaX: mapX });
+                        linhaAtual = "";
+                        mapX = [];
+                        yAtual = item.transform[5];
+                    }
+                    
+                    let startIdx = linhaAtual.length;
+                    let textoItem = item.str + " ";
+                    linhaAtual += textoItem;
+                    
+                    for (let c = startIdx; c < linhaAtual.length; c++) {
+                        mapX[c] = item.transform[4];
+                    }
+                });
+                if (linhaAtual.length > 0) {
+                    linhasGlobais.push({ texto: linhaAtual, mapaX: mapX });
+                }
+            }
+
+            if (modeloAtivo === 'nova') {
+                extrairDadosNovaEC103(linhasGlobais);
+            } else if (modeloAtivo === 'antiga') {
+                extrairDadosEC103Antiga(linhasGlobais);
+            } else {
+                extrairDadosAntesEC103(linhasGlobais);
+            }
+
+        } catch (error) {
+            status.innerText = "❌ Erro ao ler o PDF.";
+            console.error(error);
+        }
+    };
+    reader.readAsArrayBuffer(file);
+}
+
+// --------------------------------------------------------------------------
+// EXTRATOR 1: CARTA NOVA EC 103
+// --------------------------------------------------------------------------
+function extrairDadosNovaEC103(linhas) {
+    dados = [];
+    linhas.forEach(linhaObj => {
+        let linha = linhaObj.texto;
+        let mapX = linhaObj.mapaX;
+        let linhaUpper = linha.toUpperCase();
+        let linhaTemDescarte = linhaUpper.includes("DESCARTADO") || linhaUpper.includes("DESCONSIDERADO") || linhaUpper.includes("EXCLUIDO");
+
+        const regex = /(?:^|[^\d/])(\d{2}\/\d{4})(?![\d/])|(\d{1,3}(?:\.\d{3})*,\d{2})(?!\d)|(\d+,\d{4,8})(?!\d)|(\*)/g;
+        let match;
+        let registroAtual = null;
+        let temAsteriscoPendente = false;
+        let xDataAtual = 0;
+
+        while ((match = regex.exec(linha)) !== null) {
+            let matchX = mapX[match.index]; 
+
+            if (match[1]) { 
+                if (registroAtual) dados.push(registroAtual); 
+                xDataAtual = matchX; 
+                registroAtual = {
+                    competencia: formatarData(match[1]),
+                    salario: null,
+                    indice: null,
+                    corrigido: null,
+                    temAsterisco: temAsteriscoPendente,
+                    descartado: linhaTemDescarte 
+                };
+                temAsteriscoPendente = false; 
+            } else if (match[2]) { 
+                if (registroAtual) {
+                    let valor = parseFloat(match[2].replace(/\./g, '').replace(',', '.'));
+                    let distanciaFisica = matchX - xDataAtual;
+                    if (distanciaFisica > 150) {
+                        registroAtual.corrigido = valor;
+                        registroAtual.descartado = true; 
+                    } else {
+                        if (registroAtual.salario === null) {
+                            registroAtual.salario = valor;
+                        } else if (registroAtual.corrigido === null) {
+                            registroAtual.corrigido = valor;
+                        }
+                    }
+                }
+            } else if (match[3]) { 
+                if (registroAtual && registroAtual.indice === null) {
+                    registroAtual.indice = match[3]; 
+                }
+            } else if (match[4]) { 
+                if (registroAtual) {
+                    registroAtual.temAsterisco = true;
+                } else {
+                    temAsteriscoPendente = true; 
+                }
+            }
+        }
+        if (registroAtual) dados.push(registroAtual);
+    });
+    atualizarFiltros();
+}
+
+// --------------------------------------------------------------------------
+// EXTRATOR 2: CARTA EC 103 (Antiga)
+// --------------------------------------------------------------------------
+function extrairDadosEC103Antiga(linhas) {
+    dados = [];
+    linhas.forEach(linhaObj => {
+        let linha = linhaObj.texto;
+        let linhaUpper = linha.toUpperCase();
+        let linhaTemDescarte = linhaUpper.includes("DESCARTADO") || linhaUpper.includes("DESCONSIDERADO") || linhaUpper.includes("EXCLUIDO");
+
+        const regex = /(?:^|[^\d/])(\d{2}\/\d{4})(?![\d/])|(\d{1,3}(?:\.\d{3})*,\d{2})(?!\d)|(\d+,\d{4,8})(?!\d)|(\*)/g;
+        let match;
+        let dataStr = null;
+        let valores = [];
+        let indices = [];
+        let temAsterisco = false;
+
+        while ((match = regex.exec(linha)) !== null) {
+            if (match[1]) {
+                dataStr = formatarData(match[1]);
+            } else if (match[2]) {
+                valores.push(parseFloat(match[2].replace(/\./g, '').replace(',', '.')));
+            } else if (match[3]) {
+                indices.push(match[3]);
+            } else if (match[4]) {
+                temAsterisco = true;
+            }
+        }
+
+        if (dataStr) {
+            let salario = valores.length > 0 ? valores[0] : null;
+            let corrigido = valores.length > 1 ? valores[1] : null;
+            let indice = indices.length > 0 ? indices[0] : null;
+
+            if (valores.length === 1 && linhaTemDescarte) {
+                corrigido = valores[0];
+                salario = null;
+            }
+
+            dados.push({
+                competencia: dataStr,
+                salario: salario,
+                indice: indice,
+                corrigido: corrigido,
+                temAsterisco: temAsterisco,
+                descartado: linhaTemDescarte
+            });
+        }
+    });
+    atualizarFiltros();
+}
+
+// --------------------------------------------------------------------------
+// EXTRATOR 3: CARTA ANTES DA EC 103 (REVISADO - ADAPTADO PARA QUEBRAS DE LINHA)
+// --------------------------------------------------------------------------
+function extrairDadosAntesEC103(linhas) {
+    dados = [];
+    let ultimoRegistroAtivo = null;
+
+    linhas.forEach(linhaObj => {
+        let linha = linhaObj.texto;
+        let linhaUpper = linha.toUpperCase();
+        let linhaTemDescarte = linhaUpper.includes("DESCARTADO") || linhaUpper.includes("DESCONSIDERADO") || linhaUpper.includes("EXCLUIDO");
+
+        const regex = /(?:^|[^\d/])(\d{2}\/\d{4})(?![\d/])|(\d{1,3}(?:\.\d{3})*,\d{2})(?!\d)|(\d+,\d{4,8})(?!\d)|(\*)/g;
+        let match;
+        
+        let dataNaLinha = null;
+        let valoresNaLinha = [];
+        let indicesNaLinha = [];
+        let temAsterisco = false;
+
+        while ((match = regex.exec(linha)) !== null) {
+            if (match[1]) {
+                dataNaLinha = formatarData(match[1]);
+            } else if (match[2]) {
+                valoresNaLinha.push(parseFloat(match[2].replace(/\./g, '').replace(',', '.')));
+            } else if (match[3]) {
+                indicesNaLinha.push(match[3]);
+            } else if (match[4]) {
+                temAsterisco = true;
+            }
+        }
+
+        // Se achou uma nova data, salva a anterior e cria o novo bloco
+        if (dataNaLinha) {
+            if (ultimoRegistroAtivo) {
+                dados.push(ultimoRegistroAtivo);
+            }
+            ultimoRegistroAtivo = {
+                competencia: dataNaLinha,
+                salario: valoresNaLinha.length > 0 ? valoresNaLinha[0] : null,
+                corrigido: valoresNaLinha.length > 1 ? valoresNaLinha[1] : null,
+                indice: indicesNaLinha.length > 0 ? indicesNaLinha[0] : null,
+                temAsterisco: temAsterisco,
+                descartado: linhaTemDescarte
+            };
+        } 
+        // Se NÃO tem data na linha, mas tem valores soltos E temos um registro ativo (quebra de linha do PDF)
+        else if (ultimoRegistroAtivo && (valoresNaLinha.length > 0 || indicesNaLinha.length > 0)) {
+            if (ultimoRegistroAtivo.salario === null && valoresNaLinha.length > 0) {
+                ultimoRegistroAtivo.salario = valoresNaLinha[0];
+                if (valoresNaLinha.length > 1) ultimoRegistroAtivo.corrigido = valoresNaLinha[1];
+            } else if (ultimoRegistroAtivo.corrigido === null && valoresNaLinha.length > 0) {
+                ultimoRegistroAtivo.corrigido = valoresNaLinha[0];
+            }
+            if (ultimoRegistroAtivo.indice === null && indicesNaLinha.length > 0) {
+                ultimoRegistroAtivo.indice = indicesNaLinha[0];
+            }
+            if (temAsterisco) ultimoRegistroAtivo.temAsterisco = true;
+            if (linhaTemDescarte) ultimoRegistroAtivo.descartado = true;
+        }
+    });
+
+    if (ultimoRegistroAtivo) {
+        dados.push(ultimoRegistroAtivo);
+    }
+
+    atualizarFiltros();
+}
+
+function formatarData(data) {
+    let [mes, ano] = data.split("/");
+    return `01/${mes}/${ano}`;
+}
+
+function converterParaData(dataBR) {
+    let [dia, mes, ano] = dataBR.split("/");
+    return new Date(ano, mes - 1, dia);
+}
+
+function atualizarFiltros() {
+    if (dados.length === 0) return;
+    analisarErros();
+    renderTabela();
+}
+
+function analisarErros() {
+    let erros = [];
+    let mapCompetencias = new Map();
+    let processados = []; 
+    
+    let checkAsterisco = document.getElementById("chkAsterisco").checked;
+    let checkDescartado = document.getElementById("chkDescartado").checked;
+
+    dados.forEach(d => {
+        d.erro = false;
+        d.isExactDuplicate = false;
+        d.ignorado = false;
+    });
+
+    dados.sort((a, b) => converterParaData(a.competencia) - converterParaData(b.competencia));
+
+    for (let i = 0; i < dados.length; i++) {
+        let atual = dados[i];
+
+        if (atual.temAsterisco && !checkAsterisco) {
+            atual.ignorado = true;
+            continue; 
+        }
+
+        if (atual.descartado && !checkDescartado) {
+            atual.ignorado = true;
+            continue;
+        }
+
+        if (mapCompetencias.has(atual.competencia)) {
+            let anterior = mapCompetencias.get(atual.competencia);
+            if (anterior.salario === atual.salario) {
+                atual.erro = true;
+                atual.isExactDuplicate = true;
+            } else {
+                atual.erro = true;
+                anterior.erro = true;
+                let msg = `❌ Divergência de valores na mesma competência: ${atual.competencia}`;
+                if (!erros.includes(msg)) erros.push(msg);
+            }
+            continue; 
+        }
+
+        mapCompetencias.set(atual.competencia, atual);
+
+        if (!atual.salario || atual.salario === 0) {
+            if (!atual.descartado) {
+                atual.erro = true;
+                erros.push(`Valor do Salário Original não encontrado: ${atual.competencia}`);
+            } else {
+                processados.push(atual);
+            }
+        } else {
+            processados.push(atual);
+        }
+    }
+
+    for (let i = 1; i < processados.length; i++) {
+        let anterior = converterParaData(processados[i - 1].competencia);
+        let atualData = converterParaData(processados[i].competencia);
+        anterior.setMonth(anterior.getMonth() + 1);
+
+        if (anterior.getTime() !== atualData.getTime()) {
+            erros.push(`Lacuna entre ${processados[i - 1].competencia} e ${processados[i].competencia}`);
+        }
+    }
+
+    mostrarErros(erros);
+}
+
+function mostrarErros(lista) {
+    const div = document.getElementById("erros");
+    if (lista.length === 0) {
+        div.innerHTML = "✅ Dados validados com sucesso. Nenhuma lacuna/erro nos dados ativos.";
+        return;
+    }
+    div.innerHTML = "<b>Avisos/Erros encontrados:</b><br>";
+    lista.forEach(e => {
+        div.innerHTML += "• " + e + "<br>";
+    });
+}
+
+function renderTabela() {
+    tabela.innerHTML = "";
+    let validados = 0;
+
+    dados.forEach(d => {
+        if (d.ignorado) return; 
+
+        let row = tabela.insertRow();
+        if (d.erro && !d.isExactDuplicate) row.classList.add("erro");
+
+        if (d.isExactDuplicate) {
+            row.style.opacity = "0.4";
+            row.title = "Cópia exata deletada automaticamente.";
+        }
+
+        let textoCompetencia = d.competencia;
+        if (d.temAsterisco) textoCompetencia += " (*)";
+        if (d.descartado) textoCompetencia += " (DESC)";
+        
+        let formatMoeda = (val) => val !== null && !isNaN(val) ? val.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : "-";
+
+        row.insertCell(0).textContent = textoCompetencia;
+        row.insertCell(1).textContent = formatMoeda(d.salario);
+        row.insertCell(2).textContent = d.indice || "-";
+        row.insertCell(3).textContent = formatMoeda(d.corrigido);
+
+        if (!d.erro && !d.isExactDuplicate) {
+            validados++;
+        }
+    });
+
+    status.innerText = `✅ Concluído (${validados} registros prontos para exportação)`;
+}
+
+function exportarCSV() {
+    if (dados.length === 0) {
+        alert("Não há dados para exportar. Leia um PDF primeiro.");
+        return;
+    }
+
+    let expSalario = document.getElementById("colSalario").checked;
+    let expIndice = document.getElementById("colIndice").checked;
+    let expCorrigido = document.getElementById("colCorrigido").checked;
+
+    let header = ["Competencia"];
+    if (expSalario) header.push("Salario_Original");
+    if (expIndice) header.push("Indice");
+    if (expCorrigido) header.push("Salario_Corrigido");
+
+    let csv = header.join(";") + "\n";
+    let countExportado = 0;
+
+    dados.forEach(d => {
+        if (d.ignorado || d.isExactDuplicate) return; 
+
+        let linhaData = [d.competencia];
+        
+        if (expSalario) {
+            linhaData.push(d.salario !== null && !isNaN(d.salario) ? d.salario.toFixed(2).replace('.', ',') : "");
+        }
+        if (expIndice) {
+            linhaData.push(d.indice !== null ? d.indice : "");
+        }
+        if (expCorrigido) {
+            linhaData.push(d.corrigido !== null && !isNaN(d.corrigido) ? d.corrigido.toFixed(2).replace('.', ',') : "");
+        }
+
+        csv += linhaData.join(";") + "\n";
+        countExportado++;
+    });
+
+    if(countExportado === 0){
+        alert("Nenhum dado válido para exportar com os filtros atuais.");
+        return;
+    }
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "dados_inss.csv";
+    link.click();
+}
+
+</script>
+
+</body>
+</html>
