@@ -110,7 +110,7 @@ body {
     color: #000 !important;
 }
 
-.controles-botoes label {
+.s-botoes label {
     cursor: pointer;
     font-weight: bold;
     user-select: none;
@@ -198,21 +198,21 @@ th {
 
 <div class="painel">
     <div class="controles-botoes">
-        <button onclick="exportarCSV()">⬇ Baixar CSV Selecionado</button>
-        <button onclick="limparDados()" class="btn-limpar">🗑 Limpar Dados</button>
-        <button onclick="window.open('https://contadoriajefs.github.io/Extrator_SC_CNIS_INSS/', '_blank') class="btn-amarelo">🔗 Extrator SC CNIS</button>
-        <button onclick="window.open('https://contadoriajefs.github.io/extrator-SC-RMI-contjefs/', '_blank')" class="btn-amarelo">🔗 Extrator SC RMI CONTJEFs</button>
-        
-        <label title="Ignora as linhas com asterisco na carta">
-            <input type="checkbox" id="chkAsterisco" checked onchange="atualizarFiltros()"> 
-            Considerar asteriscos (*)
-        </label>
+    <button onclick="exportarCSV()">⬇ Baixar CSV Selecionado</button>
+    <button onclick="limparDados()" class="btn-limpar">🗑 Limpar Dados</button>
+    <button onclick="window.open('https://contadoriajefs.github.io/Extrator_SC_CNIS_INSS/', '_blank')" class="btn-amarelo">🔗 Extrator SC CNIS</button>
+    <button onclick="window.open('https://contadoriajefs.github.io/extrator-SC-RMI-contjefs/', '_blank')" class="btn-amarelo">🔗 Extrator SC RMI CONTJEFs</button>
+    
+    <label title="Ignora as linhas com asterisco na carta">
+        <input type="checkbox" id="chkAsterisco" checked onchange="atualizarFiltros()"> 
+        Considerar asteriscos (*)
+    </label>
 
-        <label title="Se desmarcado, oculta salários marcados como descartados/excluídos">
-            <input type="checkbox" id="chkDescartado" checked onchange="atualizarFiltros()"> 
-            Considerar salários descartados/desconsiderados
-        </label>
-    </div>
+    <label title="Se desmarcado, oculta salários marcados como descartados/excluídos">
+        <input type="checkbox" id="chkDescartado" checked onchange="atualizarFiltros()"> 
+        Considerar salários descartados/desconsiderados
+    </label>
+</div>
 
     <div class="selecao-colunas">
         <span>Colunas no CSV:</span>
